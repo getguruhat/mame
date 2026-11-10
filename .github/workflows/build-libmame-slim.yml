@@ -1,0 +1,43 @@
+name: Build slim libmame (macOS arm64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      exclude:
+        description: "Space-separated src/mame/<folder> names to leave out"
+        default: "atari"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Generate driver filter (everything except excluded folders)
+        run: |
+          cd src/mame
+          args=""
+          for d in ${{ inputs.exclude }}; do args="$args -not -path ./$d/*"; done
+          find . -name '*.cpp' $args | sed 's|^\./||' | sort > ../../slim.flt
+          wc -l ../../slim.flt
+          grep -c '^atari/' ../../slim.flt || true
+
+      - name: Build libmame (Mac Catalyst, arm64 only)
+        run: ./make-ios.sh mac-catalyst-arm64 SOURCEFILTER=slim.flt
+
+      - name: Package
+        run: |
+          ls -lh libmame-mac-arm64.a
+          gzip --keep --force libmame-mac-arm64.a
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libmame-mac-arm64-slim
+          path: libmame-mac-arm64.a.gz
+          if-no-files-found: error
