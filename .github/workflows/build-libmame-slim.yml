@@ -1,14 +1,13 @@
 name: Build slim libmame (macOS arm64)
 
+# Builds MAME with ONLY the drivers listed in keep-drivers.flt
+# (paths relative to src/mame). Edit that file to add or drop games.
+
 on:
   workflow_dispatch:
-    inputs:
-      exclude:
-        description: "Space-separated src/mame/<folder> names to leave out"
-        default: "atari"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -19,14 +18,11 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Generate driver filter (everything except excluded folders)
+      - name: Use keep-drivers.flt as the driver filter
         run: |
-          cd src/mame
-          args=""
-          for d in ${{ inputs.exclude }}; do args="$args -not -path ./$d/*"; done
-          find . -name '*.cpp' $args | sed 's|^\./||' | sort > ../../slim.flt
-          wc -l ../../slim.flt
-          grep -c '^atari/' ../../slim.flt || true
+          cp keep-drivers.flt slim.flt
+          wc -l slim.flt
+          for f in $(cat slim.flt); do test -f src/mame/$f || { echo "missing $f"; exit 1; }; done
 
       - name: Build libmame (Mac Catalyst, arm64 only)
         run: ./make-ios.sh mac-catalyst-arm64 SOURCEFILTER=slim.flt
